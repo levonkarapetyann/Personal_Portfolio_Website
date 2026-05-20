@@ -95,6 +95,10 @@ document.addEventListener('DOMContentLoaded', () => {
         preChatForm.style.display = 'none';
         chatArea.style.display = 'flex';
         
+        // Триггерим переподключение или отправку сообщения на бэкенд, 
+        // чтобы сервер зафиксировал сессию, и принудительно запрашиваем историю
+        socket.emit('user_msg', { user_name: userName, user_email: userEmail, message: "👋 Вошёл в чат" });
+        
         input.focus();
     });
 
@@ -108,6 +112,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('user_receive', (data) => {
         addMessage(data.message, 'bot');
+    });
+
+    socket.on('lsmg', (history) => {
+        messagesBox.innerHTML = '<div class="msg bot">Hi! How can I help you today?</div>';
+        
+        history.forEach(m => {
+            // Загружаем сообщения только этого конкретного пользователя
+            if (m.username === userName) {
+                if (m.sender_type === 'user') {
+                    addMessage(m.message, 'user');
+                    emailSent = true; // Если он уже писал, не шлем повторный alert
+                } else if (m.sender_type === 'admin') {
+                    addMessage(m.message, 'bot');
+                }
+            }
+        });
     });
 
     function sendMessage() {
