@@ -14,104 +14,228 @@ Admin panel
    <div id="user-list">
       <h3>Active users</h3>
       <div id="users">
-         {% for user in existing_users %}
-             <div class="user-item"
-                id="user-{{ user.username }}"
-                style="cursor: pointer; padding: 10px; border-bottom: 1px solid #1E90FF; background-color: #f7f5f5;"
-                onclick="selectUser('{{ user.username }}', '{{ user.sid }}')">
-                {{ user.username }}
-             </div>
-          {% endfor %}
-      </div>
+        {% for user in existing_users %}
+        <div class="user-item" 
+             id="user-{{ user.username }}" 
+             onclick="selectUser('{{ user.username }}', '{{ user.sid }}')"
+             style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 12px 16px; border-bottom: 1px solid #f0f2f5;">
+            
+            <span class="user-name-text">{{ user.username }}</span>
+            
+            <button class="delete-user-btn" 
+                    onclick="event.stopPropagation(); deleteUserFromSystem('{{ user.username }}')" 
+                    style="background: transparent; border: none; color: #ff4d4f; font-size: 18px; cursor: pointer; padding: 0 5px; line-height: 1; transition: color 0.2s;">
+                &times;
+            </button>
+        </div>
+    {% endfor %}
+</div>
    </div>
    <div id="chat-panel">
-      <div id="admin-log"></div>
+      <div id="admin-log" style="position: relative; display: flex; flex-direction: column; height: 400px; border: 1px solid #ccc; background: #fff; border-radius: 8px;"></div>
       <div class="reply">
-         <span id="replying-to">Select a user</span>
-         <input type="text" id="admin-input"  placeholder="Write reponse...">
-         <button type="submit" class="btn btn-reponse" onclick="sendReply()">Send</button>
+        <span id="replying-to">Select a user</span>
+        <div style="display: flex; gap: 10px;">
+           <input type="text" id="admin-input" placeholder="Write response...">
+           <button type="submit" class="btn btn-reponse" onclick="sendReply()">Send</button>
+        </div>
       </div>
    </div>
+</div>
+<div id="custom-confirm-modal" class="confirm-modal-overlay">
+    <div class="confirm-modal-content">
+        <h4>Delete User?</h4>
+        <p id="modal-confirm-text">Are you sure?</p>
+        <div class="confirm-modal-buttons">
+            <button id="modal-cancel-btn">Cancel</button>
+            <button id="modal-confirm-btn">Delete</button>
+        </div>
+    </div>
 </div>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
     let userSid = null;
     let userName = null;
-    const socket = io()
+    const socket = io();
 
+    // 1. ДОБАВЛЕНО: Функция переключения между пользователями
     function selectUser(name, sid) {
         userSid = sid;
         userName = name;
         document.getElementById('replying-to').textContent = `Replying to: ${name}`;
+        
+        // Подсвечиваем активного пользователя в списке
         document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
         const selectedEl = document.getElementById('user-' + name);
         if (selectedEl) {
             selectedEl.classList.add('active');
+            selectedEl.style.backgroundColor = ''; // Сбрасываем уведомление о новом сообщении
         }
-    }
-    document.addEventListener('DOMContentLoader', () => {
-        const adminInput = document.getElementById('admin-input');
-    }); 
-    socket.on('admin_receive', (data) => {
-       const log = document.getElementById('admin-log')
-       log.innerHTML += `<div><b>${data.user_name}:</b> ${data.message}</div>`
-       log.scrollTop = log.scrollHeight;
-       addUserToList(data.user_name, data.sid);
 
-       if (!userSid) {
-           selectUser(data.user_name, data.sid);
+        // Показываем только чат-бокс выбранного пользователя
+        document.querySelectorAll('.user-chat-box').forEach(box => box.classList.remove('active'));
+        
+        let currentBox = document.getElementById('chat-box-' + name);
+        if (!currentBox) {
+            // Если бокса нет (например, зашли первый раз), создаем его
+            currentBox = document.createElement('div');
+            currentBox.className = 'user-chat-box';
+            currentBox.id = 'chat-box-' + name;
+            document.getElementById('admin-log').appendChild(currentBox);
+        }
+        
+        currentBox.classList.add('active');
+        currentBox.scrollTop = currentBox.scrollHeight;
+    }
+
+    // 2. ДОБАВЛЕНО: Универсальная функция добавления сообщений в нужные коробки
+    function appendMessageToChat(targetUser, text, senderType) {
+        const logContainer = document.getElementById('admin-log');
+        let box = document.getElementById('chat-box-' + targetUser);
+        
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'user-chat-box';
+            box.id = 'chat-box-' + targetUser;
+            logContainer.appendChild(box);
+            if (userName === targetUser) {
+                box.classList.add('active');
+            }
+        }
+
+        const div = document.createElement('div');
+        div.className = `admin-msg-row ${senderType === 'admin' ? 'msg-admin' : 'msg-user'}`;
+        div.innerHTML = `<b>${senderType === 'admin' ? 'You' : targetUser}:</b> ${text}`;
+        
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    // 3. ДОБАВЛЕНО: Прием новых сообщений от пользователей «на лету»
+    socket.on('admin_receive', (data) => {
+       // Если пользователя нет в списке слева, добавляем динамически
+       addUserToList(data.user_name, data.sid);
+       
+       // Кладём сообщение исключительно в его коробку
+       appendMessageToChat(data.user_name, data.message, 'user');
+
+       // Если админ сейчас открыл чужой чат, подсвечиваем вкладку написавшего
+       if (userName !== data.user_name) {
+           const userRow = document.getElementById('user-' + data.user_name);
+           if (userRow) userRow.style.backgroundColor = '#e6f7ff'; 
        }
     });
 
     function addUserToList(name, sid) {
-        if (document.getElementById('user-' + sid)) return;
+        const existingItem = document.getElementById('user-' + name);
+        if (existingItem) {
+            // Обновляем SID на случай переподключения пользователя
+            existingItem.onclick = () => selectUser(name, sid);
+            return;
+        }
 
         const users = document.getElementById('users');
         const div = document.createElement('div');
         div.className = 'user-item';
-        div.id = 'user-' + sid;
-        div.textContent = name;
+        div.id = 'user-' + name;
+        div.style = "display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 12px 16px; border-bottom: 1px solid #f0f2f5;";
         div.onclick = () => selectUser(name, sid);
+
+        const span = document.createElement('span');
+        span.className = 'user-name-text';
+        span.textContent = name;
+        div.appendChild(span);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-user-btn';
+        delBtn.innerHTML = '&times;';
+        delBtn.style = "background: transparent; border: none; color: #ff4d4f; font-size: 18px; cursor: pointer; padding: 0 5px; line-height: 1;";
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteUserFromSystem(name);
+        };
+        div.appendChild(delBtn);
         users.appendChild(div);
     }
 
+    // 4. ИСПРАВЛЕНО: Логика отправки ответа админом
+    function sendReply() {
+        const input = document.getElementById('admin-input');
+        const text = input.value.trim();
+        if (!text) return;
 
-   function sendReply() {
-       const input = document.getElementById('admin-input')
-       const text = input.value
-       if (!text) return;
+        if (!userSid) {
+            alert('Select a user first!');
+            return;
+        }
 
-       if (!userSid) {
-           alert('Select a user first!');
-           return;
+        // Отправляем бэкенду текст и SID адресата
+        socket.emit('admin_reply', { message: text, target_sid: userSid });
+
+        // Добавляем сообщение в чат-бокс ТЕКУЩЕГО пользователя
+        appendMessageToChat(userName, text, 'admin');
+        input.value = '';
+    }
+
+    // Нажатие Enter в инпуте
+    document.addEventListener('DOMContentLoaded', () => {
+        const adminInput = document.getElementById('admin-input');
+        if (adminInput) {
+            adminInput.onkeydown = function(e) {
+                if (e.key === 'Enter') sendReply();
+            };
+        }
+    });
+
+    // 5. ИСПРАВЛЕНО: Сборщик начальной истории
+    socket.on('lsmg', function(history) {
+       if (history && history.length > 0) {
+          let lastUserContext = null;
+          history.forEach(m => {
+               if (m.sender_type === 'user') {
+                   lastUserContext = m.username;
+                   addUserToList(m.username, null);
+                   appendMessageToChat(m.username, m.message, 'user');
+               } else if (m.sender_type === 'admin' && lastUserContext) {
+                   // Временно распределяем ответы админа по контексту идущего перед ним сообщения
+                   appendMessageToChat(lastUserContext, m.message, 'admin');
+               }
+          });
        }
+    });
 
-       socket.emit('admin_reply', { message: text, target_sid: userSid });
+    // Функция вызова кастомной модалки удаления
+    function deleteUserFromSystem(username) {
+        const modal = document.getElementById('custom-confirm-modal');
+        const modalText = document.getElementById('modal-confirm-text');
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        const cancelBtn = document.getElementById('modal-cancel-btn');
 
-       const log = document.getElementById('admin-log')
-       log.innerHTML += `<div class="text-primary"><b>You:</b> ${text}</div>`
-       input.value = '';
-       log.scrollTop = log.scrollHeight;
-   }
-   const adminInput = document.getElementById('admin-input');
-   adminInput.onkeydown = function(e) {
-       if (e.key === 'Enter') {
-           sendReply();
-       }
-   };
+        modalText.textContent = `Are you sure you want to delete user "${username}" and all their messages?`;
+        modal.style.display = 'flex';
 
-   socket.on('lsmg', function(last_m) {
-      const log = document.getElementById('admin-log');
-      if (log && last_m.length > 0) {
-         last_m.forEach(m => {
-              const div = document.createElement('div');
-              div.innerHTML = `<b>${m.username}:</b> ${m.message}`;
-              log.appendChild(div)
-         });
+        confirmBtn.onclick = null;
+        cancelBtn.onclick = null;
 
-         log.scrollTop = log.scrollHeight;
-      }
-   });
+        cancelBtn.onclick = () => { modal.style.display = 'none'; };
+
+        confirmBtn.onclick = () => {
+            modal.style.display = 'none'; 
+            fetch(`/delete_user/${username}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('user-' + username)?.remove();
+                    document.getElementById('chat-box-' + username)?.remove();
+                    if (userName === username) {
+                        userSid = null;
+                        userName = null;
+                        document.getElementById('replying-to').textContent = 'Select a user';
+                    }
+                }
+            }).catch(err => console.error(err));
+        };
+    }
 </script>
 <script>
     if (!sessionStorage.getItem('is_logged_in')) {

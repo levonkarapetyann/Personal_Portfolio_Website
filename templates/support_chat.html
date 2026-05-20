@@ -11,26 +11,38 @@
 {% block script %}{% endblock %}
 <div id="custom-chat-widget">
     <div id="chat-window" class="chat-window hidden">
-        <div class="chat-header">
-            <div class="user-info">
-                <div class="status-dot"></div>
-               <span>Assistant Levon</span>
-            </div>
-            <button id="close-chat">&times;</button>
+    <div class="chat-header">
+        <div class="user-info">
+            <div class="status-dot"></div>
+           <span>Assistant Levon</span>
         </div>
+        <button id="close-chat">&times;</button>
+    </div>
+    <div id="pre-chat-form" class="chat-auth-form">
+        <p class="auth-instruction">Welcome! Please introduce yourself to start the chat.</p>
+        <div class="input-group">
+            <input type="text" id="auth-name" placeholder="Your Name" required autocomplete="off">
+        </div>
+        <div class="input-group">
+            <input type="email" id="auth-email" placeholder="Your Email" required autocomplete="off">
+        </div>
+        <button id="start-chat-btn" class="start-chat-btn">Start Chat</button>
+    </div>
+    <div id="chat-area" style="display: none; flex-direction: column; flex-grow: 1; overflow: hidden;">
         <div class="chat-messages" id="chat-messages">
             <div class="msg bot">
-                Hi there! 👋 I'm Levon virtual assistant. Please write your name.
+                Hi! How can I help you today?
             </div>
         </div>
         <div class="chat-input-area">
-            <input type="text" id="user-msg" name="user_message"placeholder="Write a message..." autocomplete="off">
+            <input type="text" id="user-msg" name="user_message" placeholder="Write a message..." autocomplete="off">
             <button id="send-msg">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
             </button>
         </div>
-        <div class="chat-footer">Powered by Levon</div>
-    </div>
+    </div>  
+    <div class="chat-footer">Powered by Levon</div>
+</div>
 
     <button id="chat-trigger" class="chat-trigger">
         <svg viewBox="0 0 24 24" width="30" height="30" fill="white"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path></svg>
@@ -43,24 +55,47 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Критическая ошибка: Библиотека Socket.IO не загружена!");
         return; 
     }
-    const socket = io()
+    const socket = io();
+    
     const chatWindow = document.getElementById('chat-window');
     const chatTrigger = document.getElementById('chat-trigger');
     const closeChat = document.getElementById('close-chat');
+    const preChatForm = document.getElementById('pre-chat-form');
+    const chatArea = document.getElementById('chat-area');
+    
+    const authNameInput = document.getElementById('auth-name');
+    const authEmailInput = document.getElementById('auth-email');
+    const startChatBtn = document.getElementById('start-chat-btn');
+    
     const sendBtn = document.getElementById('send-msg');
     const input = document.getElementById('user-msg');
     const messagesBox = document.getElementById('chat-messages');
 
     let userName = "";
     let userEmail = "";
-    let firstMessage = "";
     let emailSent = false;
 
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            sendMessage();
+    startChatBtn.addEventListener('click', () => {
+        const name = authNameInput.value.trim();
+        const email = authEmailInput.value.trim();
+
+        if (!name || !email) {
+            alert("Please fill in all fields.");
+            return;
         }
+
+        if (!email.includes('@')) {
+            alert("Please enter a valid email address.");
+            return;
+        }
+
+        userName = name;
+        userEmail = email;
+
+        preChatForm.style.display = 'none';
+        chatArea.style.display = 'flex';
+        
+        input.focus();
     });
 
     function addMessage(text, sender) {
@@ -75,56 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
         addMessage(data.message, 'bot');
     });
 
-    function sendToAdmin(name, msg) {
-        socket.emit('user_msg', {
-           user_name: name,
-           message: msg
-        });
-    }
-    function sendToServer(name, email, message) {
-        if (emailSent) return;
-        socket.emit('message_from_user', { text: message, user: name });
-        fetch('/send_message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_name: name,
-                user_email: email,
-                message: message
-            })
-        })
-        .then(res => res.json())
-        .then(data => console.log('Send:', data))
-        .catch(err => console.error('Error:', err));
-    }
-
     function sendMessage() {
         const text = input.value.trim();
         if (!text) return;
 
         addMessage(text, 'user');
         input.value = '';
-
-        if (!userName) {
-            userName = text;
-            setTimeout(() => addMessage(`Nice to meet you, ${userName}! Now enter your email so I can get back to you.`, "bot"), 600);
-            return;
-        }
-
-        if (!userEmail) {
-            if (!text.includes('@')) {
-                addMessage("Enter a valid email:", "bot");
-                return;
-            }
-            userEmail = text;
-            setTimeout(() => {
-                addMessage("I wrote it down! Now write your message or question:", "bot");
-            }, 600);
-            return;
-            
-        }
-
-        const userMessage = text;
 
         socket.emit('user_msg', {
            user_name: userName,
@@ -133,20 +124,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         if (!emailSent) {
-            sendToServer(userName, userEmail, userMessage);
-            addMessage("Thank you! Your message has been sent to Levon. I'll contact you soon! If you have any more questions, write them down.", "bot");
+            addMessage("Thank you! Your message has been sent. I'll contact you soon!", "bot");
             emailSent = true;
         }
-        
-        sendToServer(userName, userEmail, userMessage);
-
-        
     }
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    sendBtn.onclick = sendMessage;
 
     chatTrigger.onclick = () => chatWindow.classList.toggle('hidden');
     closeChat.onclick = () => chatWindow.classList.add('hidden');
-    sendBtn.onclick = sendMessage;
-    input.onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 });
 </script>
 <script>
