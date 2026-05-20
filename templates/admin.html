@@ -58,26 +58,22 @@ Admin panel
     let userName = null;
     const socket = io();
 
-    // 1. ДОБАВЛЕНО: Функция переключения между пользователями
     function selectUser(name, sid) {
         userSid = sid;
         userName = name;
         document.getElementById('replying-to').textContent = `Replying to: ${name}`;
         
-        // Подсвечиваем активного пользователя в списке
         document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
         const selectedEl = document.getElementById('user-' + name);
         if (selectedEl) {
             selectedEl.classList.add('active');
-            selectedEl.style.backgroundColor = ''; // Сбрасываем уведомление о новом сообщении
+            selectedEl.style.backgroundColor = ''; 
         }
 
-        // Показываем только чат-бокс выбранного пользователя
         document.querySelectorAll('.user-chat-box').forEach(box => box.classList.remove('active'));
         
         let currentBox = document.getElementById('chat-box-' + name);
         if (!currentBox) {
-            // Если бокса нет (например, зашли первый раз), создаем его
             currentBox = document.createElement('div');
             currentBox.className = 'user-chat-box';
             currentBox.id = 'chat-box-' + name;
@@ -88,7 +84,6 @@ Admin panel
         currentBox.scrollTop = currentBox.scrollHeight;
     }
 
-    // 2. ДОБАВЛЕНО: Универсальная функция добавления сообщений в нужные коробки
     function appendMessageToChat(targetUser, text, senderType) {
         const logContainer = document.getElementById('admin-log');
         let box = document.getElementById('chat-box-' + targetUser);
@@ -111,15 +106,11 @@ Admin panel
         box.scrollTop = box.scrollHeight;
     }
 
-    // 3. ДОБАВЛЕНО: Прием новых сообщений от пользователей «на лету»
     socket.on('admin_receive', (data) => {
-       // Если пользователя нет в списке слева, добавляем динамически
        addUserToList(data.user_name, data.sid);
-       
-       // Кладём сообщение исключительно в его коробку
+
        appendMessageToChat(data.user_name, data.message, 'user');
 
-       // Если админ сейчас открыл чужой чат, подсвечиваем вкладку написавшего
        if (userName !== data.user_name) {
            const userRow = document.getElementById('user-' + data.user_name);
            if (userRow) userRow.style.backgroundColor = '#e6f7ff'; 
@@ -129,7 +120,6 @@ Admin panel
     function addUserToList(name, sid) {
         const existingItem = document.getElementById('user-' + name);
         if (existingItem) {
-            // Обновляем SID на случай переподключения пользователя
             existingItem.onclick = () => selectUser(name, sid);
             return;
         }
@@ -158,7 +148,6 @@ Admin panel
         users.appendChild(div);
     }
 
-    // 4. ИСПРАВЛЕНО: Логика отправки ответа админом
     function sendReply() {
         const input = document.getElementById('admin-input');
         const text = input.value.trim();
@@ -169,15 +158,12 @@ Admin panel
             return;
         }
 
-        // Отправляем бэкенду текст и SID адресата
         socket.emit('admin_reply', { message: text, target_sid: userSid });
 
-        // Добавляем сообщение в чат-бокс ТЕКУЩЕГО пользователя
         appendMessageToChat(userName, text, 'admin');
         input.value = '';
     }
 
-    // Нажатие Enter в инпуте
     document.addEventListener('DOMContentLoaded', () => {
         const adminInput = document.getElementById('admin-input');
         if (adminInput) {
@@ -187,24 +173,28 @@ Admin panel
         }
     });
 
-    // 5. ИСПРАВЛЕНО: Сборщик начальной истории
     socket.on('lsmg', function(history) {
        if (history && history.length > 0) {
           let lastUserContext = null;
+          let userSids = {};
+          history.forEach(m => {
+            if (m.sender_type === 'user' && m.sid) {
+                userSids[m.username] = m.sid;
+            }
+          });
+
           history.forEach(m => {
                if (m.sender_type === 'user') {
                    lastUserContext = m.username;
-                   addUserToList(m.username, null);
+                   addUserToList(m.username, userSids[m.username] || null);
                    appendMessageToChat(m.username, m.message, 'user');
                } else if (m.sender_type === 'admin' && lastUserContext) {
-                   // Временно распределяем ответы админа по контексту идущего перед ним сообщения
                    appendMessageToChat(lastUserContext, m.message, 'admin');
                }
           });
        }
     });
 
-    // Функция вызова кастомной модалки удаления
     function deleteUserFromSystem(username) {
         const modal = document.getElementById('custom-confirm-modal');
         const modalText = document.getElementById('modal-confirm-text');

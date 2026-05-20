@@ -193,6 +193,7 @@ def handle_connect():
     history = []
     for m in all_messages:
         sender_type = 'admin' if m.username == 'admin' else 'user'
+        current_sid = user_sessions.get(m.username, None)
         
         history.append({
             'username': m.username,
