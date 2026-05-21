@@ -99,21 +99,39 @@ Admin panel
         }
 
         const div = document.createElement('div');
-        div.className = `admin-msg-row ${senderType === 'admin' ? 'msg-admin' : 'msg-user'}`;
-        div.innerHTML = `<b>${senderType === 'admin' ? 'You' : targetUser}:</b> ${text}`;
+        if (senderType === 'admin') {
+            div.className = 'admin-msg-row msg-admin';
+            div.innerHTML = `<b>You:</b> ${text}`;
+        } else if (senderType === 'ai') {
+            div.className = 'admin-msg-row msg-ai';
+            div.innerHTML = `<b>🤖 AI:</b> ${text}`;
+        } else {
+            div.className = 'admin-msg-row msg-user';
+            div.innerHTML = `<b>${targetUser}:</b> ${text}`;
+        }
         
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
     }
 
     socket.on('admin_receive', (data) => {
-       addUserToList(data.user_name, data.sid);
+       if (!data.is_ai) {
+           addUserToList(data.user_name, data.sid);
+       }
 
-       appendMessageToChat(data.user_name, data.message, 'user');
+       const displayName = data.is_ai ? data.user_name : data.user_name;
+       const senderType = data.is_ai ? 'ai' : 'user';
 
-       if (userName !== data.user_name) {
+       let targetUser = data.user_name;
+       if (data.is_ai) {
+           targetUser = data.user_name.replace('🤖 AI → ', '');
+       }
+
+       appendMessageToChat(targetUser, data.message, senderType);
+
+       if (!data.is_ai && userName !== data.user_name) {
            const userRow = document.getElementById('user-' + data.user_name);
-           if (userRow) userRow.style.backgroundColor = '#e6f7ff'; 
+           if (userRow) userRow.style.backgroundColor = '#e6f7ff';
        }
     });
 
@@ -153,12 +171,12 @@ Admin panel
         const text = input.value.trim();
         if (!text) return;
 
-        if (!userSid) {
+        if (!userName) {
             alert('Select a user first!');
             return;
         }
 
-        socket.emit('admin_reply', { message: text, target_sid: userSid });
+        socket.emit('admin_reply', { message: text, target_sid: userSid, target_username: userName });
 
         appendMessageToChat(userName, text, 'admin');
         input.value = '';
@@ -190,6 +208,8 @@ Admin panel
                    appendMessageToChat(m.username, m.message, 'user');
                } else if (m.sender_type === 'admin' && lastUserContext) {
                    appendMessageToChat(lastUserContext, m.message, 'admin');
+               } else if (m.username === 'ai_bot' && lastUserContext) {
+                   appendMessageToChat(lastUserContext, m.message, 'ai');
                }
           });
        }
@@ -235,4 +255,3 @@ Admin panel
     sessionStorage.setItem('is_logged_in', 'true');
 </script>
 {% endblock %}
-

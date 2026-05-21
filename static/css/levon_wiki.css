@@ -1075,3 +1075,29 @@ body {
 .confirm-modal-buttons button:active {
     transform: scale(0.98);
 }
+
+#mic-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 50%;
+    color: var(--text-muted, #888);
+    transition: color 0.2s, background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#mic-btn:hover {
+    color: var(--accent, #a855f7);
+    background: rgba(168, 85, 247, 0.1);
+}
+#mic-btn.recording {
+    color: #f5222d;
+    background: rgba(245, 34, 45, 0.1);
+    animation: pulse 1s infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

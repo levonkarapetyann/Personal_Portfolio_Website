@@ -260,3 +260,10 @@ h1 {
 
 #modal-cancel-btn:hover { background: #e4e6eb !important; }
 #modal-confirm-btn:hover { background: #e03e3f !important; }
+
+.msg-ai {
+    background: #f0f7ff;
+    border-left: 3px solid #4096ff;
+    color: #1d3557;
+    font-style: italic;
+}

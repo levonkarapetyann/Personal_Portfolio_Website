@@ -3,6 +3,7 @@ eventlet.monkey_patch()
 
 
 import os
+import requests
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_mail import Mail, Message
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user
@@ -10,6 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
+import time
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///messages.db'
@@ -18,6 +20,9 @@ db = SQLAlchemy(app)
 load_dotenv()
 messages_history = []
 user_sessions = {}
+
+ai_sleep_until = {}
+AI_SLEEP_SECONDS = 3600
 
 class Messages(db.Model):
       id = db.Column(db.Integer, primary_key=True)
@@ -115,11 +120,237 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+LEVON_SYSTEM_PROMPT = """You are an AI assistant on Levon Karapetyan's personal website. 
+Your job is to answer questions about Levon in a friendly and informative way.
+Always answer in THIRD person — never say "I", "me", "my", "myself". Always say "Levon", "he", "his".
+Answer only in the language the user writes in.
+Keep answers concise (2-4 sentences max).
+ 
+Here is everything you know about Levon:
+ 
+PERSONAL:
+- Full name: Levon Karapetyan
+- Location: Yerevan, Armenia
+- Email: lkaeapetyan@gmail.com
+- Phone: +37477784221
+- LinkedIn: linkedin.com/in/levon-karapetyan-a42b731a4/
+- GitHub: github.com/levonkarapetyann
+- Instagram: instagram.com/lyov._333/
+- Telegram: t.me/@lyovkarapetyan
+ 
+EDUCATION:
+- Russian-Armenian University (RAU), Yerevan
+- Bachelor of Engineering Physics — specialization in Quantum Informatics
+- Started: 2021, currently in 3rd year
+- Focus: physics, mathematics, computational technologies, quantum information
+ 
+EXPERIENCE:
+- TUMO Labs, Yerevan — Student/Trainee at Climate Net Project (March 2026 – Present)
+  6-month web development program: JavaScript, Python, Socket.IO, Nginx, Gunicorn, client-server architecture
+- Aerodynamic Company — Intern Engineer, UAV Development (Sep 2021 – Dec 2021)
+  Designed and optimized UAV aerodynamic components, 3D modeling with Fusion 360 and Autodesk tools
+ 
+ACHIEVEMENTS:
+- 1st place, Team Technical Project — Summer University, Krasnoyarsk (2024)
+- Best Project on National Statistical Systems award
+- Selected Participant — CIS Summer School (2025)
+- Selected Participant — Winter University, Veliky Novgorod (2025)
+ 
+TECHNICAL SKILLS: JavaScript, Python, SQL, CSS, HTML, Socket.IO, Flask, Nginx, Gunicorn, Fusion 360, Autodesk
+ 
+LANGUAGES: Russian (Native), Armenian (Native), English (B1)
+ 
+If someone asks something you don't know about Levon, say you don't have that information and suggest they leave a message in the chat — Levon will respond personally."""
+
+WHISPER_PROMPT = (
+    "Transcribe only Russian or English speech. "
+    "Proper nouns and names to recognize correctly: "
+    "Levon, Karapetyan, TUMO, RAU, Yerevan, Groq, Flask, Nginx, Gunicorn. "
+    "If the audio contains a name that sounds like 'Levon', always write it as 'Levon'. "
+    "If the audio contains a name that sounds like 'Karapetyan', always write it as 'Karapetyan'. "
+    "Ignore any speech in other languages."
+)
+
+@app.route('/voice_chat', methods=['POST'])
+def voice_chat():
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file'}), 400
+
+    audio_file = request.files['audio']
+    user_name = request.form.get('user_name', 'Someone')
+    user_email = request.form.get('user_email', '')
+
+    sleep_until = ai_sleep_until.get(user_name, 0)
+    if time.time() < sleep_until:
+        return jsonify({'transcript': None, 'reply': None})
+
+    try:
+        transcribe_response = requests.post(
+            'https://api.groq.com/openai/v1/audio/transcriptions',
+            headers={'Authorization': f"Bearer {os.getenv('GROQ_API_KEY')}"},
+            files={
+                'file': (audio_file.filename or 'audio.webm', audio_file.stream, audio_file.mimetype or 'audio/webm')
+            },
+            data={
+                'model': 'whisper-large-v3',
+                'language': 'ru', 
+                'prompt': WHISPER_PROMPT,
+                'response_format': 'json'
+            },
+            timeout=15
+        )
+        transcribe_response.raise_for_status()
+        transcript = transcribe_response.json().get('text', '').strip()
+
+        if not transcript:
+            return jsonify({'error': 'Could not transcribe audio'}), 400
+
+        groq_response = requests.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            headers={
+                'Authorization': f"Bearer {os.getenv('GROQ_API_KEY')}",
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'llama-3.1-8b-instant',
+                'max_tokens': 300,
+                'messages': [
+                    {'role': 'system', 'content': LEVON_SYSTEM_PROMPT},
+                    {'role': 'user', 'content': transcript}
+                ]
+            },
+            timeout=10
+        )
+        groq_response.raise_for_status()
+        reply = groq_response.json()['choices'][0]['message']['content']
+
+        broadcast_ai_reply(user_name, reply)
+        return jsonify({'transcript': transcript, 'reply': reply})
+
+    except Exception as e:
+        print(f"Voice chat error: {e}")
+        try:
+            msg = Message(
+                subject="⚠️ AI voice service is down",
+                recipients=[app.config['MAIL_USERNAME']],
+                body=f"Voice transcription or AI failed.\n\nPlease check the admin panel:\nhttp://10.167.163.168:8001/admin"
+            )
+            mail.send(msg)
+        except Exception as mail_err:
+            print(f"Mail error: {mail_err}")
+        return jsonify({
+            'reply': "I'm having trouble with voice right now. I've notified Levon and he'll get back to you soon! 🙏"
+        }), 200
+
+
+def broadcast_ai_reply(user_name, reply):
+    """Save AI reply to DB and notify admin panel."""
+    try:
+        m = Messages(username='ai_bot', message=reply)
+        db.session.add(m)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"DB error saving AI reply: {e}")
+    socketio.emit('admin_receive', {
+        'user_name': f'🤖 AI → {user_name}',
+        'message': reply,
+        'sid': None,
+        'is_ai': True
+    })
+
+@app.route('/ai_chat', methods=['POST'])
+def ai_chat():
+    data = request.get_json()
+    user_message = data.get('message', '').strip()
+    user_name = data.get('user_name', 'Someone')
+    user_email = data.get('user_email', '')
+    if not user_message:
+        return jsonify({'error': 'Empty message'}), 400
+
+    sleep_until = ai_sleep_until.get(user_name, 0)
+    if time.time() < sleep_until:
+        return jsonify({'reply': None})
+
+    try:
+        groq_response = requests.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            headers={
+                'Authorization': f"Bearer {os.getenv('GROQ_API_KEY')}",
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'llama-3.1-8b-instant',
+                'max_tokens': 300,
+                'messages': [
+                    {'role': 'system', 'content': LEVON_SYSTEM_PROMPT},
+                    {'role': 'user', 'content': user_message}
+                ]
+            },
+            timeout=10
+        )
+        groq_response.raise_for_status()
+        reply = groq_response.json()['choices'][0]['message']['content']
+
+        cant_answer_phrases = [
+            "don't have this information", "don't have information", "i don't have",
+            "не имею информации", "нет информации", "не могу ответить", "не знаю",
+            "leave a message", "оставьте сообщение", "i'm not sure", "i don't know"
+        ]
+        if any(p.lower() in reply.lower() for p in cant_answer_phrases):
+            try:
+                msg = Message(
+                    subject="⚠️ AI не смог ответить на вопрос",
+                    recipients=[app.config['MAIL_USERNAME']],
+                    body=(
+                        f"AI не смог ответить на вопрос пользователя.\n\n"
+                        f"Вопрос: {user_message}\n\n"
+                        f"Ответ AI: {reply}\n\n"
+                        f"Зайди в админ панель и ответь вручную:\n"
+                        f"http://10.167.163.168:8001/admin"
+                    )
+                )
+                mail.send(msg)
+            except Exception as mail_err:
+                print(f"Mail error: {mail_err}")
+
+        broadcast_ai_reply(user_name, reply)
+        return jsonify({'reply': reply})
+
+    except Exception as e:
+        print(f"AI error: {e}")
+        try:
+            msg = Message(
+                subject="⚠️ AI сервис недоступен",
+                recipients=[app.config['MAIL_USERNAME']],
+                body=(
+                    f"AI не смог обработать запрос (техническая ошибка).\n\n"
+                    f"Вопрос: {user_message}\n\n"
+                    f"Зайди в админ панель:\nhttp://10.167.163.168:8001/admin"
+                )
+            )
+            mail.send(msg)
+        except Exception as mail_err:
+            print(f"Mail error: {mail_err}")
+        return jsonify({
+            'reply': "I'm having trouble answering right now. I've notified Levon and he'll get back to you as soon as possible! 🙏"
+        }), 200
+
+
+@socketio.on('register_session')
+def handle_register_session(data):
+    """Just registers the user's socket session — no message saved, no email sent."""
+    user_name = data.get('user_name', 'Guest')
+    user_sessions[user_name] = request.sid
+
 @socketio.on('user_msg')
 def handle_user_message(data):
     user_name = data.get('user_name', 'Guest')
     user_email = data.get('user_email', 'No email')
     message = data.get('message', '')
+    sid = request.sid
+    user_sessions[user_name] = sid
+
     try:
        m = Messages(username=user_name, message=message)
        db.session.add(m)
@@ -127,9 +358,8 @@ def handle_user_message(data):
     except:
        db.session.rollback()
        flash('Error')
+
     messages_history.append({'user_name': user_name, 'message': message, 'type': 'user'})
-    sid = request.sid
-    user_sessions[user_name] = sid
     print(f"Message from {user_name}: {message}")
     emit('admin_receive', {
         'user_name': user_name,
@@ -142,10 +372,10 @@ def handle_user_message(data):
            msg = Message(
                subject=f"New message in chat from: {user_name}",
                recipients=[app.config['MAIL_USERNAME']],
-               body=f"User {user_name} ({user_email}) write you in chat: {message}\n\n"
-               f"Open admin panel ( http://10.167.163.168:8001/admin )",
-       	       reply_to=user_email
-       	   )
+               body=f"User {user_name} ({user_email}) wrote in chat: {message}\n\n"
+               f"Open admin panel: http://10.167.163.168:8001/admin",
+               reply_to=user_email
+           )
            mail.send(msg)
            sent_emails[sid] = True
         except Exception as e:
@@ -155,7 +385,12 @@ def handle_user_message(data):
 def handle_admin_reply(data):
     message_text = data.get('message')
     target_sid = data.get('target_sid')
-    
+    target_username = data.get('target_username')
+
+    if target_username:
+        ai_sleep_until[target_username] = time.time() + AI_SLEEP_SECONDS
+        print(f"[AI] Sleeping for {target_username} until {ai_sleep_until[target_username]}")
+
     try:
         m = Messages(username='admin', message=message_text)
         db.session.add(m)
@@ -165,11 +400,13 @@ def handle_admin_reply(data):
         print(f"Database error: {e}")
 
     messages_history.append({'user_name': 'You', 'message': message_text, 'type': 'admin'})
-    
+
     if target_sid:
-       emit('user_receive', data, room=target_sid)
-    else:
-       emit('user_receive', data, broadcast=True)
+        emit('user_receive', data, room=target_sid)
+    elif target_username:
+        current_sid = user_sessions.get(target_username)
+        if current_sid:
+            emit('user_receive', data, room=current_sid)
 
 @app.route('/delete_user/<username>', methods=['POST'])
 @login_required
@@ -192,8 +429,12 @@ def handle_connect():
     
     history = []
     for m in all_messages:
-        sender_type = 'admin' if m.username == 'admin' else 'user'
-        current_sid = user_sessions.get(m.username, None)
+        if m.username == 'admin':
+            sender_type = 'admin'
+        elif m.username == 'ai_bot':
+            sender_type = 'ai_bot'
+        else:
+            sender_type = 'user'
         
         history.append({
             'username': m.username,
@@ -206,4 +447,4 @@ def handle_connect():
 if __name__ == '__main__':
     with app.app_context():
          db.create_all()
-    socketio.run(app, debug=True, port=5000) 
+    socketio.run(app, debug=True, port=5000)
