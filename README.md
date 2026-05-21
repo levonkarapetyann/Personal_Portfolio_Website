@@ -20,7 +20,7 @@
 
 ## 🌐 Live Demo
     The project is officially deployed and accessible here:
-    **http://107.23.153.192/**
+    **https://levonbio.duckdns.org/**
 
 Project Structure:
    * `/static/css` - Custom stylesheets (Regular CSS)
