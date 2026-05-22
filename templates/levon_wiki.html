@@ -179,23 +179,19 @@
     el.style.setProperty('--y', e.clientY + 'px');
 });
 
-// Hide qubit when scroll content overlaps it
 (function() {
     const qubit = document.querySelector('.qubit-container');
     if (!qubit) return;
 
     function checkQubitOverlap() {
-        // Only on desktop
         if (window.innerWidth <= 768) return;
 
         const qubitRect = qubit.getBoundingClientRect();
-        // Get all right-column content blocks
         const contentBlocks = document.querySelectorAll('.scroll > *');
         let overlapping = false;
 
         contentBlocks.forEach(block => {
             const blockRect = block.getBoundingClientRect();
-            // Check if qubit overlaps with this block
             if (
                 qubitRect.left < blockRect.right &&
                 qubitRect.right > blockRect.left &&

@@ -79,7 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let userEmail = "";
     let emailSent = false;
 
-    // --- Session restore (30 minutes) ---
     const SESSION_TTL = 30 * 60 * 1000;
     const saved = JSON.parse(sessionStorage.getItem('chat_user') || 'null');
     if (saved && (Date.now() - saved.ts) < SESSION_TTL) {
@@ -148,7 +147,6 @@ document.addEventListener('DOMContentLoaded', () => {
            message: text
         });
 
-        // AI auto-reply
         try {
             const res = await fetch('/ai_chat', {
                 method: 'POST',
