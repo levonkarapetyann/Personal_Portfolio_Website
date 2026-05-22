@@ -8,13 +8,6 @@
 {% block body %}
 <div class="cursor"></div>
 <div class="fix-icon">
-   <div class="qubit-container">
-      <h2>Quantum State: <span id="qubit-value">|0⟩</span></h2>
-      <div class="qubit-sphere" onclick="collapseVector()">
-      <div class="electron"></div>
-   </div>
-   <small>Click to collapse wave function</small>
-   </div>
     <nav class="nav-menu">
         <a href="#about" class="nav-link">
            <span class="nav-line"></span>
@@ -29,10 +22,12 @@
            <span class="nav-text">Technical skills</span>
         </a>
     </nav>
-   <a href="https://www.linkedin.com/in/levon-karapetyan-a42b731a4/" target="_blank"><i class='bx bxl-linkedin-square'></i></a>
-   <a href="https://www.instagram.com/lyov._333/" target="_blank"><i class='bx bxl-instagram' ></a></i>
-   <a href="https://github.com/levonkarapetyann" target="_blamk"><i class='bx bxl-github' ></a></i>
-   <a href="https://t.me/@lyovkarapetyan" target="_blank"><i class='bx bxl-telegram' ></a></i>
+   <div class="social-icons">
+      <a href="https://www.linkedin.com/in/levon-karapetyan-a42b731a4/" target="_blank"><i class='bx bxl-linkedin-square'></i></a>
+      <a href="https://www.instagram.com/lyov._333/" target="_blank"><i class='bx bxl-instagram'></i></a>
+      <a href="https://github.com/levonkarapetyann" target="_blank"><i class='bx bxl-github'></i></a>
+      <a href="https://t.me/@lyovkarapetyan" target="_blank"><i class='bx bxl-telegram'></i></a>
+   </div>
    <a href="/media/Levon_Karapetyan_CV.pdf" download class="download-btn">Download CV</a>
    <div class="gridd">
       <span class="gmail"><a href="mailto:lkaeapetyan@gmail.com" target="_blank"><i class='bx bxl-gmail'></i><b>lkaeapetyan@gmail.com</b></a></span>
@@ -161,6 +156,20 @@
             </div>
          </div>
       </div>
+      <div class="social-footer">
+         <div class="social-icons">
+            <a href="https://www.linkedin.com/in/levon-karapetyan-a42b731a4/" target="_blank"><i class='bx bxl-linkedin-square'></i></a>
+            <a href="https://www.instagram.com/lyov._333/" target="_blank"><i class='bx bxl-instagram'></i></a>
+            <a href="https://github.com/levonkarapetyann" target="_blank"><i class='bx bxl-github'></i></a>
+            <a href="https://t.me/@lyovkarapetyan" target="_blank"><i class='bx bxl-telegram'></i></a>
+         </div>
+         <a href="/media/Levon_Karapetyan_CV.pdf" download class="download-btn">Download CV</a>
+         <div class="gridd">
+            <span class="gmail"><a href="mailto:lkaeapetyan@gmail.com" target="_blank"><i class='bx bxl-gmail'></i><b>lkaeapetyan@gmail.com</b></a></span>
+            <span class="number"><i class='bx bxs-phone'></i><b>+37477784221</b></span>
+            <span class="loc"><i class='bx bxs-map'></i><b>Yerevan, Armenia</b></span>
+         </div>
+      </div>
    </div>
 </div>
 {% block script %}
@@ -168,7 +177,48 @@
     const el = document.querySelector('.cursor');
     el.style.setProperty('--x', e.clientX + 'px');
     el.style.setProperty('--y', e.clientY + 'px');
-});</script>
+});
+
+// Hide qubit when scroll content overlaps it
+(function() {
+    const qubit = document.querySelector('.qubit-container');
+    if (!qubit) return;
+
+    function checkQubitOverlap() {
+        // Only on desktop
+        if (window.innerWidth <= 768) return;
+
+        const qubitRect = qubit.getBoundingClientRect();
+        // Get all right-column content blocks
+        const contentBlocks = document.querySelectorAll('.scroll > *');
+        let overlapping = false;
+
+        contentBlocks.forEach(block => {
+            const blockRect = block.getBoundingClientRect();
+            // Check if qubit overlaps with this block
+            if (
+                qubitRect.left < blockRect.right &&
+                qubitRect.right > blockRect.left &&
+                qubitRect.top < blockRect.bottom &&
+                qubitRect.bottom > blockRect.top
+            ) {
+                overlapping = true;
+            }
+        });
+
+        if (overlapping) {
+            qubit.classList.add('hidden-qubit');
+        } else {
+            qubit.classList.remove('hidden-qubit');
+        }
+    }
+
+    window.addEventListener('scroll', checkQubitOverlap, { passive: true });
+    window.addEventListener('resize', checkQubitOverlap);
+    // Run once on load
+    setTimeout(checkQubitOverlap, 100);
+})();
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     const observerOptions = {
@@ -187,29 +237,5 @@ document.addEventListener("DOMContentLoaded", function() {
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 });
 </script>
-<script>function collapseVector() {
-    const display = document.getElementById('qubit-value');
-    const sphere = document.querySelector('.qubit-sphere');
-    const electron = document.querySelector('.electron'); 
-
-    electron.classList.remove('quantum-flicker');
-    sphere.style.animation = 'none';
-
-    const result = Math.random() > 0.5 ? '|0⟩' : '|1⟩';
-    display.innerText = result;
-    display.style.textShadow = '0 0 20px #fff'; 
-
-    setTimeout(() => {
-        electron.classList.add('quantum-flicker');
-        sphere.style.animation = 'rotate 4s linear infinite';
-        display.style.textShadow = 'none';
-        display.innerText = 'Superposition';
-    }, 1500);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelector('.electron').classList.add('quantum-flicker');
-});</script>
 {% endblock %}
 {% endblock %}
-
