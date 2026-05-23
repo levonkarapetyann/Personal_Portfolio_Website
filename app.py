@@ -155,6 +155,8 @@ ACHIEVEMENTS:
 - Best Project on National Statistical Systems award
 - Selected Participant — CIS Summer School (2025)
 - Selected Participant — Winter University, Veliky Novgorod (2025)
+- Hackathon Participant — Ministry of High-Tech Industry of Armenia (May 2026)
+  Developed and pitched an LCNC platform concept and demo with team "inHub" within 72 hours
  
 TECHNICAL SKILLS: JavaScript, Python, SQL, CSS, HTML, Socket.IO, Flask, Nginx, Gunicorn, Fusion 360, Autodesk
  
@@ -293,9 +295,27 @@ def ai_chat():
         reply = groq_response.json()['choices'][0]['message']['content']
 
         cant_answer_phrases = [
-            "don't have this information", "don't have information", "i don't have",
-            "не имею информации", "нет информации", "не могу ответить", "не знаю",
-            "leave a message", "оставьте сообщение", "i'm not sure", "i don't know"
+            "i don't have", "i do not have", "don't have this information",
+            "don't have information", "no information", "i'm not sure",
+            "i am not sure", "i don't know", "i do not know", "not sure about",
+            "i'm unable to", "i am unable to", "unable to provide",
+            "i cannot provide", "i can't provide", "i cannot answer",
+            "i can't answer", "i lack", "i'm afraid i don't",
+            "i'm afraid i can't", "i apologize", "unfortunately i don't",
+            "unfortunately, i don't", "unfortunately i cannot",
+            "i have no information", "no details available",
+            "leave a message", "contact levon", "reach out to levon",
+            "levon will respond", "levon can answer",
+            "не имею информации", "нет информации", "не могу ответить",
+            "не знаю", "не знаком", "не располагаю",
+            "у меня нет информации", "у меня нет данных",
+            "не могу сказать", "мне неизвестно", "мне не известно",
+            "не уверен", "не уверена", "к сожалению не знаю",
+            "к сожалению, не знаю", "к сожалению не могу",
+            "к сожалению, не могу", "не могу предоставить",
+            "эта информация мне недоступна", "не располагаю данными",
+            "оставьте сообщение", "напишите левону", "левон ответит",
+            "свяжитесь с левоном", "обратитесь к левону"
         ]
         if any(p.lower() in reply.lower() for p in cant_answer_phrases):
             try:
