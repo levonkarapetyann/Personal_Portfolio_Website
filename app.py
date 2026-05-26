@@ -1,5 +1,5 @@
-from gevent import monkey
-monkey.patch_all()
+import eventlet
+eventlet.monkey_patch()
 
 import os
 import time
@@ -99,9 +99,12 @@ def index():
 def admin():
     users_from_db = db.session.query(Messages.username).order_by(Messages.id.desc()).distinct().all()
 
+    SYSTEM_USERS = {'admin', 'ai_bot'}
     existing_users = []
     for user in users_from_db:
         name = user[0]
+        if name in SYSTEM_USERS:
+            continue
         sid = user_sessions.get(name, None)
         existing_users.append({
             'username': name,
@@ -401,10 +404,10 @@ def handle_user_message(data):
     if sid not in sent_emails:
         try:
            msg = Message(
-               subject=f"New message in chat from: {user_name}",
+               subject=f"📝 New message in chat from: {user_name}",
                recipients=[app.config['MAIL_USERNAME']],
                body=f"User {user_name} ({user_email}) wrote in chat: {message}\n\n"
-               f"Open admin panel: http://10.167.163.168:8001/admin",
+               f"Go to the admin panel",
                reply_to=user_email
            )
            mail.send(msg)

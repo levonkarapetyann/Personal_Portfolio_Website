@@ -6,6 +6,8 @@
 {% endblock %}
 
 {% block body %}
+<!-- Progress bar -->
+<div id="scroll-progress"></div>
 <div class="cursor"></div>
 <div class="fix-icon">
     <nav class="nav-menu">
@@ -38,13 +40,27 @@
 <div class="main">
    <div class="fix">
        <h1>Levon Karapetyan</h1>
-       <h3>3rd Year Quantum Information Science</h3>
+       <h3 id="typing-text"></h3>
        <p>Engineering Physics student specializing in Quantum Informatics.<br>Interested in research, data-driven engineering, and innovative technology projects.</p>
    </div>
    <div class="scroll">
       <div id="about" class="about">
           <div class="reveal"><h1 class="what"><b>What I Do</b></h1></div>
           <p class="about1">I am an Engineering Physics student at RAU specializing in Quantum Information.My background includes designing UAVs at Aerodynamic and winning first place at the Summer University program in Krasnoyarsk for an original engineering project. I excel at bridging the gap between mathematical theory and practical implementation.</p>
+          <div class="stats-row">
+             <div class="stat-item">
+                <span class="stat-num" data-target="3">0</span>
+                <span class="stat-label">Years of Study</span>
+             </div>
+             <div class="stat-item">
+                <span class="stat-num" data-target="2">0</span>
+                <span class="stat-label">Internships</span>
+             </div>
+             <div class="stat-item">
+                <span class="stat-num" data-target="4">0</span>
+                <span class="stat-label">Awards</span>
+             </div>
+          </div>
       </div>
       <div class="study">
          <div class="hovv">
@@ -57,26 +73,11 @@
       <div class="achievements">
          <div class="reveal"><p id="ach-title"><b>ACHIEVEMENTS & AWARDS</b></p></div>
          <p id="ach1"><b>Team Technical Project, Summer University (Krasnoyarsk, 2024)</b></p>
-         <div class="award">
-            <span class="kras_diplom"><b>Hover over to view the diploma.</b></span>
-            <img src="static/img/kras.jpg" alt="kras_photo" class="kras">
-         </div>
          <p id="ach2"><b>Best Project on National Statistical Systems</b></p>
-         <div class="award2">
-            <img src="static/img/static.jpg" alt="static" class="static_photo">
-            <span class="static"><b>Hover over to view the diploma</b></span>
-         </div>
          <p id="ach3"><b>Selected Participant - CIS Summer School (2025)</b></p>
-         <div class="award3">
-            <img src="static/img/minsk.jpg" alt="photo" class="cert_photo">
-            <span class="cert"><b>Hover over to view the certificate</b></span>
-         </div>
          <p id="ach4"><b>Selected Participant - Winter University (Veliky Novgorod, 2025)</b></p>
-         <div class="award4">
-            <img src="static/img/winter_photo.jpg" alt="photo" class="winter_photo">
-            <span class="winter"><b>Hover to view the certificate</b></span>
-         </div>
       </div>
+      <div class="timeline-container">
       <div id="experience" class="work-experience reveal">
          <div class="date">
             03/2026 - PRESENT
@@ -128,6 +129,7 @@
             </div>
          </div>
       </div>
+      </div>
       <div class="right reveal">
          <div id="skills" class="skills-sect">
             <h2>Technical Skills</h2>
@@ -163,7 +165,7 @@
                   <span>English</span>
                   <span>B1</span>
                </div>
-               <div class="line" data-lang="native"></div>
+               <div class="line" data-lang="b1"></div>
             </div>
             <div class="lang-item">
                <div class="info">
@@ -191,63 +193,86 @@
    </div>
 </div>
 {% block script %}
-<script>document.addEventListener('mousemove', (e) => {
+<script>
+// 1. PROGRESS BAR
+window.addEventListener('scroll', () => {
+    const scrollTop = window.scrollY;
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+    document.getElementById('scroll-progress').style.width = progress + '%';
+});
+
+// 2. TYPING EFFECT
+(function() {
+    const phrases = [
+        '3rd Year Quantum Information Science',
+        'Engineering Physics @ RAU',
+        'Web Developer in Training',
+        'UAV Design Enthusiast',
+    ];
+    const el = document.getElementById('typing-text');
+    let phraseIdx = 0, charIdx = 0, deleting = false;
+
+    function type() {
+        const current = phrases[phraseIdx];
+        if (!deleting) {
+            el.textContent = current.substring(0, charIdx + 1);
+            charIdx++;
+            if (charIdx === current.length) {
+                deleting = true;
+                setTimeout(type, 1800);
+                return;
+            }
+        } else {
+            el.textContent = current.substring(0, charIdx - 1);
+            charIdx--;
+            if (charIdx === 0) {
+                deleting = false;
+                phraseIdx = (phraseIdx + 1) % phrases.length;
+            }
+        }
+        setTimeout(type, deleting ? 45 : 80);
+    }
+    type();
+})();
+
+// 3. COUNTERS
+function animateCounter(el) {
+    const target = parseInt(el.dataset.target);
+    let current = 0;
+    const step = Math.ceil(target / 40);
+    const timer = setInterval(() => {
+        current += step;
+        if (current >= target) { current = target; clearInterval(timer); }
+        el.textContent = current + '+';
+    }, 40);
+}
+
+const counterObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting && !entry.target.dataset.counted) {
+            entry.target.dataset.counted = 'true';
+            animateCounter(entry.target);
+        }
+    });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('.stat-num').forEach(el => counterObserver.observe(el));
+
+// 4. CURSOR
+document.addEventListener('mousemove', (e) => {
     const el = document.querySelector('.cursor');
     el.style.setProperty('--x', e.clientX + 'px');
     el.style.setProperty('--y', e.clientY + 'px');
 });
 
-(function() {
-    const qubit = document.querySelector('.qubit-container');
-    if (!qubit) return;
-
-    function checkQubitOverlap() {
-        if (window.innerWidth <= 768) return;
-
-        const qubitRect = qubit.getBoundingClientRect();
-        const contentBlocks = document.querySelectorAll('.scroll > *');
-        let overlapping = false;
-
-        contentBlocks.forEach(block => {
-            const blockRect = block.getBoundingClientRect();
-            if (
-                qubitRect.left < blockRect.right &&
-                qubitRect.right > blockRect.left &&
-                qubitRect.top < blockRect.bottom &&
-                qubitRect.bottom > blockRect.top
-            ) {
-                overlapping = true;
-            }
-        });
-
-        if (overlapping) {
-            qubit.classList.add('hidden-qubit');
-        } else {
-            qubit.classList.remove('hidden-qubit');
-        }
-    }
-
-    window.addEventListener('scroll', checkQubitOverlap, { passive: true });
-    window.addEventListener('resize', checkQubitOverlap);
-    // Run once on load
-    setTimeout(checkQubitOverlap, 100);
-})();
-</script>
-<script>
+// REVEAL ON SCROLL
 document.addEventListener("DOMContentLoaded", function() {
-    const observerOptions = {
-
-    };
-
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add("active");
-
-            }
+            if (entry.isIntersecting) entry.target.classList.add("active");
         });
-    }, observerOptions);
-
+    });
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 });
 </script>

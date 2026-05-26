@@ -3,24 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        .audio-play-btn {
-            background: rgba(255,255,255,0.15);
-            border: none;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            margin-left: 8px;
-            cursor: pointer;
-            font-size: 11px;
-            color: #fff;
-            vertical-align: middle;
-            transition: background 0.2s;
-        }
-        .audio-play-btn:hover {
-            background: rgba(255,255,255,0.3);
-        }
-    </style>
     {% block stylesheet %}{% endblock %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socketio/4.0.1/socketio.js"></script>
     <title>{% block title %}{% endblock %}</title>
@@ -47,7 +29,7 @@
         </div>
         <button id="start-chat-btn" class="start-chat-btn">Start Chat</button>
     </div>
-    <div id="chat-area" style="display: none; flex-direction: column; flex-grow: 1; overflow: hidden;">
+    <div id="chat-area">
         <div class="chat-messages" id="chat-messages">
             <div class="msg bot">
                 Hi! How can I help you today?
