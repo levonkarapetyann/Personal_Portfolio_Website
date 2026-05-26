@@ -354,9 +354,8 @@ body {
    color: #94a3b8 !important;
 }
 
-/* Social icons wrapper */
 .social-icons {
-   display: contents; /* on desktop: acts transparent, children keep fixed position */
+   display: contents;
 }
 
 @media (min-width: 769px) {
@@ -743,7 +742,6 @@ body {
 }
 
 @media (max-width: 768px) {
-   /* Layout */
    .main {
       flex-direction: column;
       padding: 16px;
@@ -763,12 +761,10 @@ body {
       margin: 0;
    }
 
-   /* Navigation — hide on mobile */
    .nav-menu {
       display: none;
    }
 
-   /* Text blocks */
    .about1, .about2, .about3,
    .study1, .study2, .what, #ach-title,
    .about-study1, #ach1, #ach2, #ach3, #ach4 {
@@ -791,7 +787,6 @@ body {
       font-size: 0.75rem;
    }
 
-   /* Download button — remove fixed positioning on mobile */
    .download-btn {
       position: relative !important;
       left: auto !important;
@@ -800,7 +795,6 @@ body {
       width: fit-content;
    }
 
-   /* Social icons — horizontal row on mobile */
    .bxl-linkedin-square,
    .bxl-instagram,
    .bxl-github,
@@ -810,7 +804,6 @@ body {
       margin-right: 0;
    }
 
-   /* Make fix-icon show icons in a row */
    .fix-icon {
       position: relative !important;
       display: flex;
@@ -819,13 +812,11 @@ body {
       width: 100%;
    }
 
-   /* Icons row wrapper — target the <a> tags */
    .fix-icon > a {
       display: inline-flex !important;
       position: static !important;
    }
 
-   /* Group social icons in a flex row */
    .fix-icon {
       display: flex;
       flex-direction: column;
@@ -838,7 +829,6 @@ body {
       position: static !important;
    }
 
-   /* Contact grid */
    .gridd {
       position: relative !important;
       flex-direction: column;
@@ -921,9 +911,6 @@ body {
   from { transform: scale(0.95); opacity: 0.9; }
   to { transform: scale(1.05); opacity: 1; }
 }
-
-/* qubit position handled in .fix-icon layout */
-
 
 .quantum-flicker {
     animation: jitter 0.15s infinite alternate, glow 0.2s infinite alternate;
@@ -1194,7 +1181,7 @@ audio-msg {
 .audio-play-btn:hover {
    background: rgba(255,255,255,0.3);
 }
-/* ===== 1. PROGRESS BAR ===== */
+
 #scroll-progress {
     position: fixed;
     top: 0;
@@ -1207,7 +1194,6 @@ audio-msg {
     border-radius: 0 2px 2px 0;
 }
 
-/* ===== 2. TYPING EFFECT cursor blink ===== */
 #typing-text::after {
     content: '|';
     animation: blink 0.7s step-end infinite;
@@ -1309,4 +1295,41 @@ audio-msg {
     .timeline-container { padding-left: 14px; margin-left: 0; margin-right: 0; }
     .timeline-container .work-experience,
     .timeline-container .work-experience2 { margin-left: 14px; }
+}
+
+.physics-bg-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 200vw; 
+    height: 200vh;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 400;
+    transform: translate(-50%, -50%) rotate(-12deg); 
+    opacity: 0.12;
+    user-select: none;
+}
+
+.formula-row {
+    font-size: 0.95rem;
+    white-space: nowrap;
+    letter-spacing: 0.15em;
+    color: rgba(123, 70, 246, 0.9);
+    width: 100%;
+    text-align: center;
+}
+
+.formula-row:nth-child(even) {
+    color: rgba(148, 163, 184, 0.7);
+}
+
+body:hover .physics-bg-overlay {
+    opacity: 0.08;
+    transition: opacity 0.5s ease;
 }

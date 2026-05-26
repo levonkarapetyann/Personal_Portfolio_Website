@@ -16,7 +16,6 @@ body {
     overflow: hidden;
 }
 
-/* Animated background glow */
 body::before {
     content: '';
     position: fixed;
