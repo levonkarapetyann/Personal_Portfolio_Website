@@ -3,6 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .audio-play-btn {
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            margin-left: 8px;
+            cursor: pointer;
+            font-size: 11px;
+            color: #fff;
+            vertical-align: middle;
+            transition: background 0.2s;
+        }
+        .audio-play-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
     {% block stylesheet %}{% endblock %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socketio/4.0.1/socketio.js"></script>
     <title>{% block title %}{% endblock %}</title>
@@ -113,6 +131,71 @@ document.addEventListener('DOMContentLoaded', () => {
         div.textContent = text;
         messagesBox.appendChild(div);
         messagesBox.scrollTop = messagesBox.scrollHeight;
+        return div;
+    }
+
+    function addAudioMessage(audioB64, sender) {
+        const div = document.createElement('div');
+        div.className = `msg ${sender} audio-msg`;
+
+        const audioBlob = new Blob(
+            [Uint8Array.from(atob(audioB64), c => c.charCodeAt(0))],
+            { type: 'audio/mpeg' }
+        );
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        const playBtn = document.createElement('button');
+        playBtn.className = 'audio-play-btn';
+        playBtn.innerHTML = '▶';
+
+        const wave = document.createElement('div');
+        wave.className = 'audio-wave';
+        for (let i = 0; i < 28; i++) {
+            const bar = document.createElement('span');
+            bar.style.height = Math.random() * 14 + 4 + 'px';
+            wave.appendChild(bar);
+        }
+
+        const timer = document.createElement('span');
+        timer.className = 'audio-timer';
+        timer.textContent = '0:00';
+
+        audio.addEventListener('loadedmetadata', () => {
+            const dur = Math.round(audio.duration);
+            timer.textContent = `0:${dur < 10 ? '0' + dur : dur}`;
+        });
+
+        let interval;
+        playBtn.addEventListener('click', () => {
+            if (audio.paused) {
+                audio.play();
+                playBtn.innerHTML = '⏸';
+                wave.classList.add('playing');
+                interval = setInterval(() => {
+                    const t = Math.round(audio.currentTime);
+                    timer.textContent = `0:${t < 10 ? '0' + t : t}`;
+                }, 500);
+            } else {
+                audio.pause();
+                playBtn.innerHTML = '▶';
+                wave.classList.remove('playing');
+                clearInterval(interval);
+            }
+        });
+
+        audio.addEventListener('ended', () => {
+            playBtn.innerHTML = '▶';
+            wave.classList.remove('playing');
+            clearInterval(interval);
+            timer.textContent = '0:00';
+        });
+
+        div.appendChild(playBtn);
+        div.appendChild(wave);
+        div.appendChild(timer);
+        messagesBox.appendChild(div);
+        messagesBox.scrollTop = messagesBox.scrollHeight;
     }
 
     socket.on('user_receive', (data) => {
@@ -209,7 +292,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.transcript) {
                     socket.emit('user_msg', { user_name: userName, user_email: userEmail, message: `🎤 ${data.transcript}` });
                 }
-                if (data.reply) addMessage(data.reply, 'bot');
+                if (data.audio_b64) {
+                    addAudioMessage(data.audio_b64, 'bot');
+                } else if (data.reply) {
+                    addMessage(data.reply, 'bot');
+                }
             } catch (e) {
                 addMessage('⚠️ Could not process voice. Please try typing instead.', 'bot');
             }

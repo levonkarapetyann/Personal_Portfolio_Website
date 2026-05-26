@@ -1,10 +1,10 @@
-import eventlet
-eventlet.monkey_patch()
-
+from gevent import monkey
+monkey.patch_all()
 
 import os
-import requests
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+import time
+import openai
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
 from flask_mail import Mail, Message
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -13,11 +13,12 @@ from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 import time
 
+load_dotenv()
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///messages.db'
 app.secret_key = 'my_very_secret_key'
 db = SQLAlchemy(app)
-load_dotenv()
 messages_history = []
 user_sessions = {}
 
@@ -130,6 +131,7 @@ Here is everything you know about Levon:
  
 PERSONAL:
 - Full name: Levon Karapetyan
+- Age: 22 years old
 - Location: Yerevan, Armenia
 - Email: lkaeapetyan@gmail.com
 - Phone: +37477784221
@@ -164,15 +166,6 @@ LANGUAGES: Russian (Native), Armenian (Native), English (B1)
  
 If someone asks something you don't know about Levon, say you don't have that information and suggest they leave a message in the chat — Levon will respond personally."""
 
-WHISPER_PROMPT = (
-    "Transcribe only Russian or English speech. "
-    "Proper nouns and names to recognize correctly: "
-    "Levon, Karapetyan, TUMO, RAU, Yerevan, Groq, Flask, Nginx, Gunicorn. "
-    "If the audio contains a name that sounds like 'Levon', always write it as 'Levon'. "
-    "If the audio contains a name that sounds like 'Karapetyan', always write it as 'Karapetyan'. "
-    "Ignore any speech in other languages."
-)
-
 @app.route('/voice_chat', methods=['POST'])
 def voice_chat():
     if 'audio' not in request.files:
@@ -180,69 +173,96 @@ def voice_chat():
 
     audio_file = request.files['audio']
     user_name = request.form.get('user_name', 'Someone')
-    user_email = request.form.get('user_email', '')
 
     sleep_until = ai_sleep_until.get(user_name, 0)
     if time.time() < sleep_until:
         return jsonify({'transcript': None, 'reply': None})
 
     try:
-        transcribe_response = requests.post(
-            'https://api.groq.com/openai/v1/audio/transcriptions',
-            headers={'Authorization': f"Bearer {os.getenv('GROQ_API_KEY')}"},
-            files={
-                'file': (audio_file.filename or 'audio.webm', audio_file.stream, audio_file.mimetype or 'audio/webm')
-            },
-            data={
-                'model': 'whisper-large-v3',
-                'language': 'ru', 
-                'prompt': WHISPER_PROMPT,
-                'response_format': 'json'
-            },
-            timeout=15
-        )
-        transcribe_response.raise_for_status()
-        transcript = transcribe_response.json().get('text', '').strip()
+        import io, base64
+        client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
+        audio_io = io.BytesIO(audio_file.read())
+        audio_io.name = 'voice.webm'
+        transcription = client.audio.transcriptions.create(
+            model='whisper-1',
+            file=audio_io,
+            language='ru',
+            prompt='Levon, Karapetyan, TUMO, RAU, Yerevan, Flask, Nginx, Gunicorn'
+        )
+        transcript = transcription.text.strip()
         if not transcript:
             return jsonify({'error': 'Could not transcribe audio'}), 400
 
-        groq_response = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={
-                'Authorization': f"Bearer {os.getenv('GROQ_API_KEY')}",
-                'Content-Type': 'application/json'
-            },
-            json={
-                'model': 'llama-3.1-8b-instant',
-                'max_tokens': 300,
-                'messages': [
-                    {'role': 'system', 'content': LEVON_SYSTEM_PROMPT},
-                    {'role': 'user', 'content': transcript}
-                ]
-            },
-            timeout=10
+        # Step 2: Get AI text reply
+        chat_response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            max_tokens=300,
+            messages=[
+                {'role': 'system', 'content': LEVON_SYSTEM_PROMPT},
+                {'role': 'user', 'content': transcript}
+            ]
         )
-        groq_response.raise_for_status()
-        reply = groq_response.json()['choices'][0]['message']['content']
+        reply_text = chat_response.choices[0].message.content
 
-        broadcast_ai_reply(user_name, reply)
-        return jsonify({'transcript': transcript, 'reply': reply})
+        tts_response = client.audio.speech.create(
+            model='tts-1',
+            voice='nova',
+            input=reply_text
+        )
+        audio_b64 = base64.b64encode(tts_response.content).decode('utf-8')
+
+        cant_answer_phrases = [
+            "i don't have", "i do not have", "don't have this information",
+            "don't have information", "no information", "i'm not sure",
+            "i am not sure", "i don't know", "i do not know", "not sure about",
+            "i'm unable to", "i am unable to", "unable to provide",
+            "i cannot provide", "i can't provide", "i cannot answer",
+            "i can't answer", "i lack", "i'm afraid i don't",
+            "i'm afraid i can't", "i apologize", "unfortunately i don't",
+            "unfortunately, i don't", "unfortunately i cannot",
+            "i have no information", "no details available",
+            "leave a message", "contact levon", "reach out to levon",
+            "levon will respond", "levon can answer",
+            "не имею информации", "нет информации", "не могу ответить",
+            "не знаю", "не знаком", "не располагаю",
+            "у меня нет информации", "у меня нет данных",
+            "не могу сказать", "мне неизвестно", "мне не известно",
+            "не уверен", "не уверена", "к сожалению не знаю",
+            "к сожалению, не знаю", "к сожалению не могу",
+            "к сожалению, не могу", "не могу предоставить",
+            "эта информация мне недоступна", "не располагаю данными",
+            "оставьте сообщение", "напишите левону", "левон ответит",
+            "свяжитесь с левоном", "обратитесь к левону"
+        ]
+        if any(p.lower() in reply_text.lower() for p in cant_answer_phrases):
+            try:
+                msg = Message(
+                    subject="⚠️ AI could not answer the voice question",
+                    recipients=[app.config['MAIL_USERNAME']],
+                    body=f"Answer: {transcript}\n\nGo to the admin panel:"
+                )
+                mail.send(msg)
+            except Exception as mail_err:
+                print(f"Mail error: {mail_err}")
+
+        broadcast_ai_reply(user_name, reply_text)
+        return jsonify({'transcript': transcript, 'reply': reply_text, 'audio_b64': audio_b64})
 
     except Exception as e:
         print(f"Voice chat error: {e}")
         try:
             msg = Message(
-                subject="⚠️ AI voice service is down",
+                subject="⚠️ Voice service unavailable",
                 recipients=[app.config['MAIL_USERNAME']],
-                body=f"Voice transcription or AI failed.\n\nPlease check the admin panel:\nhttp://10.167.163.168:8001/admin"
+                body=f"Error: {e}\n\nAdmin panel:"
             )
             mail.send(msg)
         except Exception as mail_err:
             print(f"Mail error: {mail_err}")
-        return jsonify({
-            'reply': "I'm having trouble with voice right now. I've notified Levon and he'll get back to you soon! 🙏"
-        }), 200
+        return jsonify({'reply': "I'm having trouble with voice right now. Levon will get back to you soon! 🙏"}), 200
+
+
 
 
 def broadcast_ai_reply(user_name, reply):
@@ -275,24 +295,16 @@ def ai_chat():
         return jsonify({'reply': None})
 
     try:
-        groq_response = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={
-                'Authorization': f"Bearer {os.getenv('GROQ_API_KEY')}",
-                'Content-Type': 'application/json'
-            },
-            json={
-                'model': 'llama-3.1-8b-instant',
-                'max_tokens': 300,
-                'messages': [
-                    {'role': 'system', 'content': LEVON_SYSTEM_PROMPT},
-                    {'role': 'user', 'content': user_message}
-                ]
-            },
-            timeout=10
+        client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        chat_response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            max_tokens=300,
+            messages=[
+                {'role': 'system', 'content': LEVON_SYSTEM_PROMPT},
+                {'role': 'user', 'content': user_message}
+            ]
         )
-        groq_response.raise_for_status()
-        reply = groq_response.json()['choices'][0]['message']['content']
+        reply = chat_response.choices[0].message.content
 
         cant_answer_phrases = [
             "i don't have", "i do not have", "don't have this information",
@@ -320,14 +332,13 @@ def ai_chat():
         if any(p.lower() in reply.lower() for p in cant_answer_phrases):
             try:
                 msg = Message(
-                    subject="⚠️ AI не смог ответить на вопрос",
+                    subject="⚠️ AI couldn't answer the question",
                     recipients=[app.config['MAIL_USERNAME']],
                     body=(
-                        f"AI не смог ответить на вопрос пользователя.\n\n"
-                        f"Вопрос: {user_message}\n\n"
-                        f"Ответ AI: {reply}\n\n"
-                        f"Зайди в админ панель и ответь вручную:\n"
-                        f"http://10.167.163.168:8001/admin"
+                        f"AI was unable to answer the user's question.\n\n"
+                        f"Answer: {user_message}\n\n"
+                        f"Response AI: {reply}\n\n"
+                        f"Log into your admin panel and reply manually:"
                     )
                 )
                 mail.send(msg)
@@ -341,12 +352,12 @@ def ai_chat():
         print(f"AI error: {e}")
         try:
             msg = Message(
-                subject="⚠️ AI сервис недоступен",
+                subject="⚠️ AI service unavailable",
                 recipients=[app.config['MAIL_USERNAME']],
                 body=(
-                    f"AI не смог обработать запрос (техническая ошибка).\n\n"
-                    f"Вопрос: {user_message}\n\n"
-                    f"Зайди в админ панель:\nhttp://10.167.163.168:8001/admin"
+                    f"AI was unable to process the request (technical error).\n\n"
+                    f"Answer: {user_message}\n\n"
+                    f"Go to the admin panel:"
                 )
             )
             mail.send(msg)
